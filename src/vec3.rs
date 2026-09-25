@@ -24,6 +24,14 @@ impl Vec3 {
         self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
     }
 
+    pub const fn cross(self, rhs: Self) -> Self {
+        Self::new(
+            self.y * rhs.z - self.z * rhs.y,
+            self.z * rhs.x - self.x * rhs.z,
+            self.x * rhs.y - self.y * rhs.x,
+        )
+    }
+
     pub fn unit(self) -> Self {
         self / self.length()
     }
@@ -104,5 +112,13 @@ mod tests {
         let b = Vec3::new(4.0, -5.0, 6.0);
 
         assert_eq!(a.dot(b), 12.0);
+    }
+
+    #[test]
+    fn calculates_cross_product() {
+        let x = Vec3::new(1.0, 0.0, 0.0);
+        let y = Vec3::new(0.0, 1.0, 0.0);
+
+        assert_eq!(x.cross(y), Vec3::new(0.0, 0.0, 1.0));
     }
 }

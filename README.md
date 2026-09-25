@@ -60,12 +60,18 @@ La Fase 2 genera cubos texturizados en:
 renders/fase2_cubos.ppm
 ```
 
+La Fase 3 genera el diorama con cinco materiales en:
+
+```text
+renders/fase3_diorama.ppm
+```
+
 ## Estado
 
 - [x] Fase 0: base del proyecto
 - [x] Fase 1: raytracer minimo
 - [x] Fase 2: cubos y texturas
-- [ ] Fase 3: diorama completo
+- [x] Fase 3: diorama completo
 - [ ] Fase 4: efectos de raytracing
 - [ ] Fase 5: camara y animacion
 - [ ] Fase 6: pulido y entrega

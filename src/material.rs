@@ -6,6 +6,7 @@ pub enum TextureKind {
     Checker { scale: f64 },
     Grass,
     Stone,
+    Water,
     Wood,
 }
 
@@ -62,6 +63,10 @@ impl Material {
                 } else {
                     self.albedo * (0.78 + 0.18 * crack)
                 }
+            }
+            TextureKind::Water => {
+                let ripple = ((point.x * 8.0).sin() * (point.z * 10.0).cos()).abs();
+                self.albedo * (0.75 + ripple * 0.2) + self.accent * (ripple * 0.25)
             }
             TextureKind::Wood => {
                 let rings = ((u * 16.0 + (v * 2.0).sin() * 0.6).floor() as i32) & 1 == 0;
