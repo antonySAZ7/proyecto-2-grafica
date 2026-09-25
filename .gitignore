@@ -1,0 +1,6 @@
+/target/
+*.ppm
+frames/
+renders/
+*.mp4
+
