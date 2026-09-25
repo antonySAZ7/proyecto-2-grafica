@@ -7,33 +7,63 @@ mod vec3;
 
 use std::fs::{File, create_dir_all};
 use std::io::{self, BufWriter, Write};
+use std::{env, process};
 
 use camera::Camera;
-use color::{Color, ppm_pixel};
+use color::{Color, minifb_pixel, ppm_pixel};
 use material::{Material, TextureKind};
+use minifb::{Key, Window, WindowOptions};
 use ray::Ray;
 use scene::{Cube, Scene};
 use vec3::Vec3;
 
+const ASPECT_RATIO: f64 = 16.0 / 9.0;
+const IMAGE_WIDTH: usize = 520;
+
 fn main() {
     println!("Proyecto 2: Diorama con Raytracing");
 
-    match render_ppm("renders/fase3_diorama.ppm") {
-        Ok(()) => println!("Fase 3 lista: renders/fase3_diorama.ppm"),
+    let show_preview = parse_show_preview();
+
+    match render("renders/fase3_diorama.ppm", show_preview) {
+        Ok(()) if show_preview => {
+            println!("Ventana cerrada. Render guardado en renders/fase3_diorama.ppm");
+        }
+        Ok(()) => println!("Render guardado en renders/fase3_diorama.ppm"),
         Err(error) => eprintln!("No se pudo renderizar la imagen: {error}"),
     }
 }
 
-fn render_ppm(path: &str) -> io::Result<()> {
-    let aspect_ratio = 16.0 / 9.0;
-    let image_width = 520;
-    let image_height = (image_width as f64 / aspect_ratio) as usize;
+fn parse_show_preview() -> bool {
+    let mut show_preview = true;
+
+    for argument in env::args().skip(1) {
+        match argument.as_str() {
+            "--no-window" => show_preview = false,
+            "--help" | "-h" => {
+                println!("Uso: cargo run -- [--no-window]");
+                println!("  --no-window   Renderiza solo el PPM, sin abrir la ventana.");
+                process::exit(0);
+            }
+            unknown => {
+                eprintln!("Argumento desconocido: {unknown}");
+                eprintln!("Uso: cargo run -- [--no-window]");
+                process::exit(2);
+            }
+        }
+    }
+
+    show_preview
+}
+
+fn render(path: &str, show_preview: bool) -> io::Result<()> {
+    let image_height = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
     let camera = Camera::look_at(
         Vec3::new(4.2, 3.1, 3.8),
         Vec3::new(0.0, -0.55, -3.6),
         Vec3::new(0.0, 1.0, 0.0),
         46.0,
-        aspect_ratio,
+        ASPECT_RATIO,
     );
     let scene = build_scene();
     let material_names = scene
@@ -44,25 +74,69 @@ fn render_ppm(path: &str) -> io::Result<()> {
         .join(", ");
 
     println!("Materiales cargados: {material_names}");
+    println!("Renderizando {IMAGE_WIDTH}x{image_height}...");
 
+    let pixels = render_pixels(IMAGE_WIDTH, image_height, camera, &scene);
+    save_ppm(path, IMAGE_WIDTH, image_height, &pixels)?;
+    if show_preview {
+        show_window(IMAGE_WIDTH, image_height, &pixels)?;
+    }
+
+    Ok(())
+}
+
+fn render_pixels(width: usize, height: usize, camera: Camera, scene: &Scene) -> Vec<Color> {
+    let mut pixels = Vec::with_capacity(width * height);
+
+    for y in 0..height {
+        let sample_y = height - 1 - y;
+        for x in 0..width {
+            let u = x as f64 / (width - 1) as f64;
+            let v = sample_y as f64 / (height - 1) as f64;
+            let ray = camera.ray_at(u, v);
+            pixels.push(ray_color(ray, scene));
+        }
+    }
+
+    pixels
+}
+
+fn save_ppm(path: &str, width: usize, height: usize, pixels: &[Color]) -> io::Result<()> {
     create_dir_all("renders")?;
     let file = File::create(path)?;
     let mut writer = BufWriter::new(file);
 
     writeln!(writer, "P3")?;
-    writeln!(writer, "{image_width} {image_height}")?;
+    writeln!(writer, "{width} {height}")?;
     writeln!(writer, "255")?;
 
-    for y in (0..image_height).rev() {
-        for x in 0..image_width {
-            let u = x as f64 / (image_width - 1) as f64;
-            let v = y as f64 / (image_height - 1) as f64;
-            let ray = camera.ray_at(u, v);
-            writer.write_all(ppm_pixel(ray_color(ray, &scene)).as_bytes())?;
-        }
+    for pixel in pixels {
+        writer.write_all(ppm_pixel(*pixel).as_bytes())?;
     }
 
     writer.flush()
+}
+
+fn show_window(width: usize, height: usize, pixels: &[Color]) -> io::Result<()> {
+    let buffer = pixels
+        .iter()
+        .map(|pixel| minifb_pixel(*pixel))
+        .collect::<Vec<_>>();
+    let mut window = Window::new(
+        "Proyecto 2 - Diorama con Raytracing | Esc para cerrar",
+        width,
+        height,
+        WindowOptions::default(),
+    )
+    .map_err(|error| io::Error::other(error.to_string()))?;
+
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        window
+            .update_with_buffer(&buffer, width, height)
+            .map_err(|error| io::Error::other(error.to_string()))?;
+    }
+
+    Ok(())
 }
 
 fn build_scene() -> Scene {

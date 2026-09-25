@@ -9,6 +9,7 @@ Crear una escena tipo diorama con materiales distintos, reflexion, refraccion, s
 ## Restricciones
 
 - No se usan librerias externas.
+- Excepcion autorizada por el profesor: `minifb` para abrir una ventana y visualizar el render.
 - El proyecto se desarrolla en fases y cada fase debe quedar en un commit separado.
 - La entrega final debe incluir un video del diorama en este README.
 
@@ -46,6 +47,14 @@ Crear una escena tipo diorama con materiales distintos, reflexion, refraccion, s
 
 ```bash
 cargo run
+```
+
+Esto abre una ventana con `minifb`. Presiona `Esc` o cierra la ventana para terminar.
+
+Para renderizar sin abrir ventana:
+
+```bash
+cargo run -- --no-window
 ```
 
 La Fase 1 genera una imagen PPM en:
