@@ -20,6 +20,10 @@ impl Vec3 {
         self.x * self.x + self.y * self.y + self.z * self.z
     }
 
+    pub const fn dot(self, rhs: Self) -> f64 {
+        self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
+    }
+
     pub fn unit(self) -> Self {
         self / self.length()
     }
@@ -46,6 +50,14 @@ impl Mul<f64> for Vec3 {
 
     fn mul(self, rhs: f64) -> Self::Output {
         Self::new(self.x * rhs, self.y * rhs, self.z * rhs)
+    }
+}
+
+impl Mul for Vec3 {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self::new(self.x * rhs.x, self.y * rhs.y, self.z * rhs.z)
     }
 }
 
@@ -84,5 +96,13 @@ mod tests {
         assert!((unit.length() - 1.0).abs() < 1e-10);
         assert!((unit.x - 0.6).abs() < 1e-10);
         assert!((unit.y - 0.8).abs() < 1e-10);
+    }
+
+    #[test]
+    fn calculates_dot_product() {
+        let a = Vec3::new(1.0, 2.0, 3.0);
+        let b = Vec3::new(4.0, -5.0, 6.0);
+
+        assert_eq!(a.dot(b), 12.0);
     }
 }

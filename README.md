@@ -54,11 +54,17 @@ La Fase 1 genera una imagen PPM en:
 renders/fase1_cielo.ppm
 ```
 
+La Fase 2 genera cubos texturizados en:
+
+```text
+renders/fase2_cubos.ppm
+```
+
 ## Estado
 
 - [x] Fase 0: base del proyecto
 - [x] Fase 1: raytracer minimo
-- [ ] Fase 2: cubos y texturas
+- [x] Fase 2: cubos y texturas
 - [ ] Fase 3: diorama completo
 - [ ] Fase 4: efectos de raytracing
 - [ ] Fase 5: camara y animacion
