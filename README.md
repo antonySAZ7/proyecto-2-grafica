@@ -48,13 +48,18 @@ Crear una escena tipo diorama con materiales distintos, reflexion, refraccion, s
 cargo run
 ```
 
+La Fase 1 genera una imagen PPM en:
+
+```text
+renders/fase1_cielo.ppm
+```
+
 ## Estado
 
 - [x] Fase 0: base del proyecto
-- [ ] Fase 1: raytracer minimo
+- [x] Fase 1: raytracer minimo
 - [ ] Fase 2: cubos y texturas
 - [ ] Fase 3: diorama completo
 - [ ] Fase 4: efectos de raytracing
 - [ ] Fase 5: camara y animacion
 - [ ] Fase 6: pulido y entrega
-
