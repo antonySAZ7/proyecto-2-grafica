@@ -12,7 +12,7 @@ use std::{env, process};
 use camera::Camera;
 use color::{Color, minifb_pixel, ppm_pixel};
 use material::{Material, TextureKind};
-use minifb::{Key, Window, WindowOptions};
+use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use ray::Ray;
 use scene::{Cube, Scene};
 use vec3::Vec3;
@@ -22,17 +22,66 @@ const IMAGE_WIDTH: usize = 520;
 const MAX_RAY_DEPTH: usize = 4;
 const RAY_BIAS: f64 = 1e-4;
 const LIGHT_DIRECTION: Vec3 = Vec3::new(-0.55, 0.8, 0.35);
+const CAMERA_TARGET: Vec3 = Vec3::new(0.0, -0.55, -3.6);
+const CAMERA_HEIGHT: f64 = 3.1;
+const INITIAL_CAMERA_ANGLE: f64 = 0.53;
+const INITIAL_CAMERA_DISTANCE: f64 = 5.65;
+const MIN_CAMERA_DISTANCE: f64 = 3.4;
+const MAX_CAMERA_DISTANCE: f64 = 8.5;
+const CAMERA_ROTATION_STEP: f64 = 0.18;
+const CAMERA_ZOOM_STEP: f64 = 0.45;
+
+#[derive(Clone, Copy, Debug)]
+struct CameraOrbit {
+    angle: f64,
+    distance: f64,
+}
+
+impl CameraOrbit {
+    const fn new(angle: f64, distance: f64) -> Self {
+        Self { angle, distance }
+    }
+
+    fn reset(&mut self) {
+        self.angle = INITIAL_CAMERA_ANGLE;
+        self.distance = INITIAL_CAMERA_DISTANCE;
+    }
+
+    fn rotate(&mut self, delta: f64) {
+        self.angle += delta;
+    }
+
+    fn zoom(&mut self, delta: f64) {
+        self.distance = (self.distance + delta).clamp(MIN_CAMERA_DISTANCE, MAX_CAMERA_DISTANCE);
+    }
+
+    fn camera(self) -> Camera {
+        let origin = Vec3::new(
+            CAMERA_TARGET.x + self.distance * self.angle.sin(),
+            CAMERA_HEIGHT,
+            CAMERA_TARGET.z + self.distance * self.angle.cos(),
+        );
+
+        Camera::look_at(
+            origin,
+            CAMERA_TARGET,
+            Vec3::new(0.0, 1.0, 0.0),
+            46.0,
+            ASPECT_RATIO,
+        )
+    }
+}
 
 fn main() {
     println!("Proyecto 2: Diorama con Raytracing");
 
     let show_preview = parse_show_preview();
 
-    match render("renders/fase4_efectos.ppm", show_preview) {
+    match render("renders/fase5_interactivo.ppm", show_preview) {
         Ok(()) if show_preview => {
-            println!("Ventana cerrada. Render guardado en renders/fase4_efectos.ppm");
+            println!("Ventana cerrada. Render guardado en renders/fase5_interactivo.ppm");
         }
-        Ok(()) => println!("Render guardado en renders/fase4_efectos.ppm"),
+        Ok(()) => println!("Render guardado en renders/fase5_interactivo.ppm"),
         Err(error) => eprintln!("No se pudo renderizar la imagen: {error}"),
     }
 }
@@ -61,13 +110,7 @@ fn parse_show_preview() -> bool {
 
 fn render(path: &str, show_preview: bool) -> io::Result<()> {
     let image_height = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
-    let camera = Camera::look_at(
-        Vec3::new(4.2, 3.1, 3.8),
-        Vec3::new(0.0, -0.55, -3.6),
-        Vec3::new(0.0, 1.0, 0.0),
-        46.0,
-        ASPECT_RATIO,
-    );
+    let camera_orbit = CameraOrbit::new(INITIAL_CAMERA_ANGLE, INITIAL_CAMERA_DISTANCE);
     let scene = build_scene();
     let material_names = scene
         .materials
@@ -79,10 +122,10 @@ fn render(path: &str, show_preview: bool) -> io::Result<()> {
     println!("Materiales cargados: {material_names}");
     println!("Renderizando {IMAGE_WIDTH}x{image_height}...");
 
-    let pixels = render_pixels(IMAGE_WIDTH, image_height, camera, &scene);
+    let pixels = render_pixels(IMAGE_WIDTH, image_height, camera_orbit.camera(), &scene);
     save_ppm(path, IMAGE_WIDTH, image_height, &pixels)?;
     if show_preview {
-        show_window(IMAGE_WIDTH, image_height, &pixels)?;
+        show_window(IMAGE_WIDTH, image_height, &scene, pixels, camera_orbit)?;
     }
 
     Ok(())
@@ -120,13 +163,16 @@ fn save_ppm(path: &str, width: usize, height: usize, pixels: &[Color]) -> io::Re
     writer.flush()
 }
 
-fn show_window(width: usize, height: usize, pixels: &[Color]) -> io::Result<()> {
-    let buffer = pixels
-        .iter()
-        .map(|pixel| minifb_pixel(*pixel))
-        .collect::<Vec<_>>();
+fn show_window(
+    width: usize,
+    height: usize,
+    scene: &Scene,
+    mut pixels: Vec<Color>,
+    mut camera_orbit: CameraOrbit,
+) -> io::Result<()> {
+    let mut buffer = to_window_buffer(&pixels);
     let mut window = Window::new(
-        "Proyecto 2 - Diorama con Raytracing | Esc para cerrar",
+        "Proyecto 2 - A/D gira | W/S zoom | R reinicia | Esc cierra",
         width,
         height,
         WindowOptions::default(),
@@ -137,9 +183,61 @@ fn show_window(width: usize, height: usize, pixels: &[Color]) -> io::Result<()> 
         window
             .update_with_buffer(&buffer, width, height)
             .map_err(|error| io::Error::other(error.to_string()))?;
+
+        if update_camera_from_input(&window, &mut camera_orbit) {
+            println!(
+                "Renderizando vista: angulo {:.2}, zoom {:.2}",
+                camera_orbit.angle, camera_orbit.distance
+            );
+            pixels = render_pixels(width, height, camera_orbit.camera(), scene);
+            buffer = to_window_buffer(&pixels);
+        }
     }
 
     Ok(())
+}
+
+fn to_window_buffer(pixels: &[Color]) -> Vec<u32> {
+    pixels.iter().map(|pixel| minifb_pixel(*pixel)).collect()
+}
+
+fn update_camera_from_input(window: &Window, camera_orbit: &mut CameraOrbit) -> bool {
+    let mut changed = false;
+
+    if window.is_key_pressed(Key::A, KeyRepeat::Yes)
+        || window.is_key_pressed(Key::Left, KeyRepeat::Yes)
+    {
+        camera_orbit.rotate(-CAMERA_ROTATION_STEP);
+        changed = true;
+    }
+
+    if window.is_key_pressed(Key::D, KeyRepeat::Yes)
+        || window.is_key_pressed(Key::Right, KeyRepeat::Yes)
+    {
+        camera_orbit.rotate(CAMERA_ROTATION_STEP);
+        changed = true;
+    }
+
+    if window.is_key_pressed(Key::W, KeyRepeat::Yes)
+        || window.is_key_pressed(Key::Up, KeyRepeat::Yes)
+    {
+        camera_orbit.zoom(-CAMERA_ZOOM_STEP);
+        changed = true;
+    }
+
+    if window.is_key_pressed(Key::S, KeyRepeat::Yes)
+        || window.is_key_pressed(Key::Down, KeyRepeat::Yes)
+    {
+        camera_orbit.zoom(CAMERA_ZOOM_STEP);
+        changed = true;
+    }
+
+    if window.is_key_pressed(Key::R, KeyRepeat::No) {
+        camera_orbit.reset();
+        changed = true;
+    }
+
+    changed
 }
 
 fn build_scene() -> Scene {

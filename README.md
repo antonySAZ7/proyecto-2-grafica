@@ -49,7 +49,14 @@ Crear una escena tipo diorama con materiales distintos, reflexion, refraccion, s
 cargo run
 ```
 
-Esto abre una ventana con `minifb`. Presiona `Esc` o cierra la ventana para terminar.
+Esto abre una ventana con `minifb`.
+
+Controles:
+
+- `A` / `D` o flechas izquierda/derecha: rotar alrededor del diorama.
+- `W` / `S` o flechas arriba/abajo: acercar y alejar la camara.
+- `R`: reiniciar la camara.
+- `Esc`: cerrar la ventana.
 
 Para renderizar sin abrir ventana:
 
@@ -81,6 +88,13 @@ La Fase 4 agrega sombras, reflexion, refraccion y skybox procedural en:
 renders/fase4_efectos.ppm
 ```
 
+La Fase 5 agrega rotacion interactiva y zoom de camara en la ventana con `minifb`.
+Tambien guarda la vista inicial en:
+
+```text
+renders/fase5_interactivo.ppm
+```
+
 ## Estado
 
 - [x] Fase 0: base del proyecto
@@ -88,5 +102,5 @@ renders/fase4_efectos.ppm
 - [x] Fase 2: cubos y texturas
 - [x] Fase 3: diorama completo
 - [x] Fase 4: efectos de raytracing
-- [ ] Fase 5: camara y animacion
+- [x] Fase 5: camara y animacion
 - [ ] Fase 6: pulido y entrega
