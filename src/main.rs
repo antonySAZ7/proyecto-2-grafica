@@ -19,17 +19,20 @@ use vec3::Vec3;
 
 const ASPECT_RATIO: f64 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 520;
+const MAX_RAY_DEPTH: usize = 4;
+const RAY_BIAS: f64 = 1e-4;
+const LIGHT_DIRECTION: Vec3 = Vec3::new(-0.55, 0.8, 0.35);
 
 fn main() {
     println!("Proyecto 2: Diorama con Raytracing");
 
     let show_preview = parse_show_preview();
 
-    match render("renders/fase3_diorama.ppm", show_preview) {
+    match render("renders/fase4_efectos.ppm", show_preview) {
         Ok(()) if show_preview => {
-            println!("Ventana cerrada. Render guardado en renders/fase3_diorama.ppm");
+            println!("Ventana cerrada. Render guardado en renders/fase4_efectos.ppm");
         }
-        Ok(()) => println!("Render guardado en renders/fase3_diorama.ppm"),
+        Ok(()) => println!("Render guardado en renders/fase4_efectos.ppm"),
         Err(error) => eprintln!("No se pudo renderizar la imagen: {error}"),
     }
 }
@@ -94,7 +97,7 @@ fn render_pixels(width: usize, height: usize, camera: Camera, scene: &Scene) -> 
             let u = x as f64 / (width - 1) as f64;
             let v = sample_y as f64 / (height - 1) as f64;
             let ray = camera.ray_at(u, v);
-            pixels.push(ray_color(ray, scene));
+            pixels.push(ray_color(ray, scene, MAX_RAY_DEPTH));
         }
     }
 
@@ -155,6 +158,7 @@ fn build_scene() -> Scene {
             0.15,
             0.0,
             0.05,
+            1.0,
         ),
         Material::new(
             "piedra",
@@ -164,6 +168,7 @@ fn build_scene() -> Scene {
             0.25,
             0.0,
             0.08,
+            1.0,
         ),
         Material::new(
             "madera",
@@ -173,6 +178,7 @@ fn build_scene() -> Scene {
             0.18,
             0.0,
             0.04,
+            1.0,
         ),
         Material::new(
             "arcilla",
@@ -182,6 +188,7 @@ fn build_scene() -> Scene {
             0.2,
             0.0,
             0.05,
+            1.0,
         ),
         Material::new(
             "agua",
@@ -189,8 +196,9 @@ fn build_scene() -> Scene {
             Vec3::new(0.08, 0.38, 0.62),
             Vec3::new(0.52, 0.84, 0.95),
             0.45,
-            0.35,
-            0.2,
+            0.55,
+            0.24,
+            1.33,
         ),
     ];
 
@@ -309,21 +317,119 @@ fn add_rocks(cubes: &mut Vec<Cube>, stone: usize) {
     ]);
 }
 
-fn ray_color(ray: Ray, scene: &Scene) -> Color {
+fn ray_color(ray: Ray, scene: &Scene, depth: usize) -> Color {
+    if depth == 0 {
+        return Vec3::new(0.0, 0.0, 0.0);
+    }
+
     if let Some(hit) = scene.hit(ray, 0.001, f64::INFINITY) {
         let material = scene.materials[hit.material_index];
         let texture_color = material.sample(hit.u, hit.v, hit.point);
-        let light_direction = Vec3::new(-0.55, 0.8, 0.35).unit();
-        let diffuse = hit.normal.dot(light_direction).max(0.0);
-        let ambient = 0.22;
-        let light = ambient + diffuse * (0.78 + material.specular * 0.12);
-        let finish = 1.0 - material.transparency * 0.25 + material.reflectivity * 0.1;
+        let direct_color = shade_hit(ray, scene, hit.point, hit.normal, material, texture_color);
+        let reflected_color = reflected_color(ray, scene, hit.point, hit.normal, material, depth);
+        let refracted_color = refracted_color(ray, scene, &hit, material, depth);
 
-        return texture_color * (light * finish);
+        let surface_weight =
+            (1.0 - material.reflectivity - material.transparency * 0.6).clamp(0.15, 1.0);
+
+        return direct_color * surface_weight
+            + reflected_color * material.reflectivity
+            + refracted_color * material.transparency;
     }
 
-    let unit_direction = (ray.at(1.0) - ray.origin).unit();
-    let blend = 0.5 * (unit_direction.y + 1.0);
+    skybox_color(ray)
+}
 
-    (1.0 - blend) * Vec3::new(1.0, 1.0, 1.0) + blend * Vec3::new(0.45, 0.68, 1.0)
+fn shade_hit(
+    ray: Ray,
+    scene: &Scene,
+    point: Vec3,
+    normal: Vec3,
+    material: Material,
+    texture_color: Color,
+) -> Color {
+    let light_direction = LIGHT_DIRECTION.unit();
+    let diffuse = normal.dot(light_direction).max(0.0);
+    let shadow = shadow_factor(scene, point, normal, light_direction);
+    let ambient = 0.25;
+    let lambert = ambient + diffuse * shadow * 0.72;
+    let view_direction = -ray.direction.unit();
+    let half_vector = (light_direction + view_direction).unit();
+    let specular = normal
+        .dot(half_vector)
+        .max(0.0)
+        .powf(24.0 + material.specular * 64.0)
+        * material.specular
+        * shadow;
+
+    texture_color * lambert + Vec3::new(1.0, 0.94, 0.82) * specular
+}
+
+fn shadow_factor(scene: &Scene, point: Vec3, normal: Vec3, light_direction: Vec3) -> f64 {
+    let shadow_ray = Ray::new(point + normal * RAY_BIAS, light_direction);
+
+    if scene.hit(shadow_ray, 0.001, f64::INFINITY).is_some() {
+        0.35
+    } else {
+        1.0
+    }
+}
+
+fn reflected_color(
+    ray: Ray,
+    scene: &Scene,
+    point: Vec3,
+    normal: Vec3,
+    material: Material,
+    depth: usize,
+) -> Color {
+    if material.reflectivity <= 0.0 {
+        return Vec3::new(0.0, 0.0, 0.0);
+    }
+
+    let direction = ray.direction.unit().reflect(normal).unit();
+    let reflected_ray = Ray::new(point + normal * RAY_BIAS, direction);
+
+    ray_color(reflected_ray, scene, depth - 1)
+}
+
+fn refracted_color(
+    ray: Ray,
+    scene: &Scene,
+    hit: &scene::HitRecord,
+    material: Material,
+    depth: usize,
+) -> Color {
+    if material.transparency <= 0.0 {
+        return Vec3::new(0.0, 0.0, 0.0);
+    }
+
+    let unit_direction = ray.direction.unit();
+    let eta_ratio = if hit.front_face {
+        1.0 / material.refractive_index
+    } else {
+        material.refractive_index
+    };
+    let direction = unit_direction
+        .refract(hit.normal, eta_ratio)
+        .unwrap_or_else(|| unit_direction.reflect(hit.normal));
+    let refracted_ray = Ray::new(hit.point + direction * RAY_BIAS, direction.unit());
+
+    ray_color(refracted_ray, scene, depth - 1)
+}
+
+fn skybox_color(ray: Ray) -> Color {
+    let unit_direction = ray.direction.unit();
+    let blend = 0.5 * (unit_direction.y + 1.0);
+    let horizon = Vec3::new(0.9, 0.96, 1.0);
+    let zenith = Vec3::new(0.32, 0.58, 0.94);
+    let sun_direction = Vec3::new(-0.35, 0.72, 0.22).unit();
+    let sun = unit_direction.dot(sun_direction).max(0.0).powf(180.0);
+    let cloud_bands = ((unit_direction.x * 18.0 + unit_direction.z * 8.0).sin()
+        * (unit_direction.y * 12.0).cos())
+    .max(0.0)
+    .powf(5.0);
+    let clouds = Vec3::new(1.0, 1.0, 1.0) * (cloud_bands * 0.18 * blend.max(0.0));
+
+    (1.0 - blend) * horizon + blend * zenith + Vec3::new(1.0, 0.82, 0.38) * (sun * 0.9) + clouds
 }

@@ -75,12 +75,18 @@ La Fase 3 genera el diorama con cinco materiales en:
 renders/fase3_diorama.ppm
 ```
 
+La Fase 4 agrega sombras, reflexion, refraccion y skybox procedural en:
+
+```text
+renders/fase4_efectos.ppm
+```
+
 ## Estado
 
 - [x] Fase 0: base del proyecto
 - [x] Fase 1: raytracer minimo
 - [x] Fase 2: cubos y texturas
 - [x] Fase 3: diorama completo
-- [ ] Fase 4: efectos de raytracing
+- [x] Fase 4: efectos de raytracing
 - [ ] Fase 5: camara y animacion
 - [ ] Fase 6: pulido y entrega

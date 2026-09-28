@@ -19,6 +19,7 @@ pub struct Material {
     pub specular: f64,
     pub transparency: f64,
     pub reflectivity: f64,
+    pub refractive_index: f64,
 }
 
 impl Material {
@@ -30,6 +31,7 @@ impl Material {
         specular: f64,
         transparency: f64,
         reflectivity: f64,
+        refractive_index: f64,
     ) -> Self {
         Self {
             name,
@@ -39,6 +41,7 @@ impl Material {
             specular,
             transparency,
             reflectivity,
+            refractive_index,
         }
     }
 

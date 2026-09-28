@@ -35,6 +35,24 @@ impl Vec3 {
     pub fn unit(self) -> Self {
         self / self.length()
     }
+
+    pub fn reflect(self, normal: Self) -> Self {
+        self - normal * (2.0 * self.dot(normal))
+    }
+
+    pub fn refract(self, normal: Self, eta_ratio: f64) -> Option<Self> {
+        let cos_theta = (-self).dot(normal).min(1.0);
+        let sin2_theta = 1.0 - cos_theta * cos_theta;
+
+        if eta_ratio * eta_ratio * sin2_theta > 1.0 {
+            return None;
+        }
+
+        let perpendicular = eta_ratio * (self + normal * cos_theta);
+        let parallel = -normal * (1.0 - perpendicular.length_squared()).abs().sqrt();
+
+        Some(perpendicular + parallel)
+    }
 }
 
 impl Add for Vec3 {
@@ -120,5 +138,27 @@ mod tests {
         let y = Vec3::new(0.0, 1.0, 0.0);
 
         assert_eq!(x.cross(y), Vec3::new(0.0, 0.0, 1.0));
+    }
+
+    #[test]
+    fn reflects_vector() {
+        let incoming = Vec3::new(1.0, -1.0, 0.0).unit();
+        let normal = Vec3::new(0.0, 1.0, 0.0);
+        let reflected = incoming.reflect(normal);
+
+        assert!((reflected.x - incoming.x).abs() < 1e-10);
+        assert!((reflected.y + incoming.y).abs() < 1e-10);
+    }
+
+    #[test]
+    fn refracts_vector() {
+        let incoming = Vec3::new(0.0, -1.0, 0.0);
+        let normal = Vec3::new(0.0, 1.0, 0.0);
+        let refracted = incoming
+            .refract(normal, 1.0 / 1.33)
+            .expect("normal incidence should refract");
+
+        assert!((refracted.x - incoming.x).abs() < 1e-10);
+        assert!((refracted.y - incoming.y).abs() < 1e-10);
     }
 }

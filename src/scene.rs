@@ -9,6 +9,7 @@ pub struct HitRecord {
     pub t: f64,
     pub point: Vec3,
     pub normal: Vec3,
+    pub front_face: bool,
     pub u: f64,
     pub v: f64,
     pub material_index: usize,
@@ -41,7 +42,7 @@ impl Cube {
             (2, self.max.z, Vec3::new(0.0, 0.0, 1.0)),
         ];
 
-        for (axis, plane, normal) in faces {
+        for (axis, plane, outward_normal) in faces {
             let direction = axis_value(ray.direction, axis);
             if direction.abs() < EPSILON {
                 continue;
@@ -55,10 +56,17 @@ impl Cube {
             let point = ray.at(t);
             if self.contains_on_face(point, axis) {
                 let (u, v) = self.face_uv(point, axis);
+                let front_face = ray.direction.dot(outward_normal) < 0.0;
+                let normal = if front_face {
+                    outward_normal
+                } else {
+                    -outward_normal
+                };
                 best = Some(HitRecord {
                     t,
                     point,
                     normal,
+                    front_face,
                     u,
                     v,
                     material_index: self.material_index,
