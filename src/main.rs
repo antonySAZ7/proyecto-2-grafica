@@ -18,15 +18,15 @@ use scene::{Cube, Scene};
 use vec3::Vec3;
 
 const ASPECT_RATIO: f64 = 16.0 / 9.0;
-const IMAGE_WIDTH: usize = 360;
+const IMAGE_WIDTH: usize = 460;
 const MAX_RAY_DEPTH: usize = 3;
 const RAY_BIAS: f64 = 1e-4;
 const LIGHT_DIRECTION: Vec3 = Vec3::new(-0.35, 0.82, 0.28);
 const CAMERA_TARGET: Vec3 = Vec3::new(0.0, -0.58, -3.7);
 const CAMERA_HEIGHT: f64 = 3.1;
 const INITIAL_CAMERA_ANGLE: f64 = 0.53;
-const INITIAL_CAMERA_DISTANCE: f64 = 5.65;
-const MIN_CAMERA_DISTANCE: f64 = 3.4;
+const INITIAL_CAMERA_DISTANCE: f64 = 5.15;
+const MIN_CAMERA_DISTANCE: f64 = 3.0;
 const MAX_CAMERA_DISTANCE: f64 = 8.5;
 const CAMERA_ROTATION_STEP: f64 = 0.18;
 const CAMERA_ZOOM_STEP: f64 = 0.45;
@@ -163,7 +163,7 @@ fn render(path: &str, show_preview: bool) -> io::Result<()> {
 }
 
 fn render_frames(frame_count: usize) -> io::Result<()> {
-    let width = 360;
+    let width = 420;
     let height = (width as f64 / ASPECT_RATIO) as usize;
     let scene = build_scene();
 
