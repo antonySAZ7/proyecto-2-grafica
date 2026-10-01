@@ -1,15 +1,16 @@
-# Proyecto 2: Diorama con Raytracing
+# Proyecto 2: Diorama nocturno de gatos con Raytracing
 
-Proyecto en Rust para construir un pequeno diorama con cubos texturizados usando raytracing.
+Proyecto en Rust para construir un pequeno diorama nocturno, cute y relacionado a gatos, usando cubos texturizados con raytracing.
 
 ## Objetivo
 
 Crear una escena tipo diorama con materiales distintos, reflexion, refraccion, skybox, rotacion de la escena y control de zoom de camara.
 
+La escena final es una islita nocturna con dos gatos de cubos, ojos brillantes, luna, estrellas, agua reflectiva/refractiva, casita y paleta morada/azul.
+
 ## Restricciones
 
-- No se usan librerias externas.
-- Excepcion autorizada por el profesor: `minifb` para abrir una ventana y visualizar el render.
+- Se usa `minifb` como excepcion autorizada por el profesor para abrir una ventana y visualizar el render.
 - El proyecto se desarrolla en fases y cada fase debe quedar en un commit separado.
 - La entrega final debe incluir un video del diorama en este README.
 
@@ -64,6 +65,28 @@ Para renderizar sin abrir ventana:
 cargo run -- --no-window
 ```
 
+Para generar frames de una animacion orbital con zoom:
+
+```bash
+cargo run -- --frames 60
+```
+
+Los frames quedan en:
+
+```text
+frames/frame_0000.ppm
+frames/frame_0001.ppm
+...
+```
+
+Si tienes `ffmpeg`, puedes convertirlos a video asi:
+
+```bash
+ffmpeg -framerate 12 -i frames/frame_%04d.ppm -pix_fmt yuv420p diorama_gatos.mp4
+```
+
+Si no tienes `ffmpeg`, abre la ventana con `cargo run` y graba la pantalla mientras rotas el diorama.
+
 La Fase 1 genera una imagen PPM en:
 
 ```text
@@ -95,6 +118,16 @@ Tambien guarda la vista inicial en:
 renders/fase5_interactivo.ppm
 ```
 
+La version final nocturna de gatos se guarda en:
+
+```text
+renders/final_gatos_nocturnos.ppm
+```
+
+## Video
+
+Pendiente de adjuntar en GitHub despues de exportar o grabar la animacion.
+
 ## Estado
 
 - [x] Fase 0: base del proyecto
@@ -103,4 +136,4 @@ renders/fase5_interactivo.ppm
 - [x] Fase 3: diorama completo
 - [x] Fase 4: efectos de raytracing
 - [x] Fase 5: camara y animacion
-- [ ] Fase 6: pulido y entrega
+- [x] Fase 6: pulido y entrega

@@ -18,11 +18,11 @@ use scene::{Cube, Scene};
 use vec3::Vec3;
 
 const ASPECT_RATIO: f64 = 16.0 / 9.0;
-const IMAGE_WIDTH: usize = 520;
-const MAX_RAY_DEPTH: usize = 4;
+const IMAGE_WIDTH: usize = 360;
+const MAX_RAY_DEPTH: usize = 3;
 const RAY_BIAS: f64 = 1e-4;
-const LIGHT_DIRECTION: Vec3 = Vec3::new(-0.55, 0.8, 0.35);
-const CAMERA_TARGET: Vec3 = Vec3::new(0.0, -0.55, -3.6);
+const LIGHT_DIRECTION: Vec3 = Vec3::new(-0.35, 0.82, 0.28);
+const CAMERA_TARGET: Vec3 = Vec3::new(0.0, -0.58, -3.7);
 const CAMERA_HEIGHT: f64 = 3.1;
 const INITIAL_CAMERA_ANGLE: f64 = 0.53;
 const INITIAL_CAMERA_DISTANCE: f64 = 5.65;
@@ -73,39 +73,70 @@ impl CameraOrbit {
 }
 
 fn main() {
-    println!("Proyecto 2: Diorama con Raytracing");
+    println!("Proyecto 2: Diorama nocturno de gatos con Raytracing");
 
-    let show_preview = parse_show_preview();
+    let options = parse_options();
 
-    match render("renders/fase5_interactivo.ppm", show_preview) {
-        Ok(()) if show_preview => {
-            println!("Ventana cerrada. Render guardado en renders/fase5_interactivo.ppm");
+    let result = if let Some(frame_count) = options.frames {
+        render_frames(frame_count)
+    } else {
+        render("renders/final_gatos_nocturnos.ppm", options.show_preview)
+    };
+
+    match result {
+        Ok(()) if options.show_preview && options.frames.is_none() => {
+            println!("Ventana cerrada. Render guardado en renders/final_gatos_nocturnos.ppm");
         }
-        Ok(()) => println!("Render guardado en renders/fase5_interactivo.ppm"),
+        Ok(()) if options.frames.is_some() => println!("Frames guardados en frames/"),
+        Ok(()) => println!("Render guardado en renders/final_gatos_nocturnos.ppm"),
         Err(error) => eprintln!("No se pudo renderizar la imagen: {error}"),
     }
 }
 
-fn parse_show_preview() -> bool {
-    let mut show_preview = true;
+#[derive(Clone, Copy, Debug)]
+struct RunOptions {
+    show_preview: bool,
+    frames: Option<usize>,
+}
 
-    for argument in env::args().skip(1) {
+fn parse_options() -> RunOptions {
+    let mut show_preview = true;
+    let mut frames = None;
+    let mut arguments = env::args().skip(1);
+
+    while let Some(argument) = arguments.next() {
         match argument.as_str() {
             "--no-window" => show_preview = false,
+            "--frames" => {
+                let Some(value) = arguments.next() else {
+                    eprintln!("Falta el numero de frames despues de --frames.");
+                    process::exit(2);
+                };
+                let parsed = value.parse::<usize>().unwrap_or_else(|_| {
+                    eprintln!("Numero de frames invalido: {value}");
+                    process::exit(2);
+                });
+                frames = Some(parsed.max(1));
+                show_preview = false;
+            }
             "--help" | "-h" => {
-                println!("Uso: cargo run -- [--no-window]");
+                println!("Uso: cargo run -- [--no-window] [--frames N]");
                 println!("  --no-window   Renderiza solo el PPM, sin abrir la ventana.");
+                println!("  --frames N    Renderiza N frames orbitando para armar un video.");
                 process::exit(0);
             }
             unknown => {
                 eprintln!("Argumento desconocido: {unknown}");
-                eprintln!("Uso: cargo run -- [--no-window]");
+                eprintln!("Uso: cargo run -- [--no-window] [--frames N]");
                 process::exit(2);
             }
         }
     }
 
-    show_preview
+    RunOptions {
+        show_preview,
+        frames,
+    }
 }
 
 fn render(path: &str, show_preview: bool) -> io::Result<()> {
@@ -126,6 +157,29 @@ fn render(path: &str, show_preview: bool) -> io::Result<()> {
     save_ppm(path, IMAGE_WIDTH, image_height, &pixels)?;
     if show_preview {
         show_window(IMAGE_WIDTH, image_height, &scene, pixels, camera_orbit)?;
+    }
+
+    Ok(())
+}
+
+fn render_frames(frame_count: usize) -> io::Result<()> {
+    let width = 360;
+    let height = (width as f64 / ASPECT_RATIO) as usize;
+    let scene = build_scene();
+
+    create_dir_all("frames")?;
+    println!("Renderizando {frame_count} frames {width}x{height}...");
+
+    for frame in 0..frame_count {
+        let progress = frame as f64 / frame_count as f64;
+        let angle = INITIAL_CAMERA_ANGLE + progress * std::f64::consts::TAU;
+        let zoom_wave = (progress * std::f64::consts::TAU).sin();
+        let distance = INITIAL_CAMERA_DISTANCE + zoom_wave * 0.9;
+        let camera = CameraOrbit::new(angle, distance).camera();
+        let pixels = render_pixels(width, height, camera, &scene);
+        let path = format!("frames/frame_{frame:04}.ppm");
+        save_ppm(&path, width, height, &pixels)?;
+        println!("Frame {}/{}: {}", frame + 1, frame_count, path);
     }
 
     Ok(())
@@ -241,62 +295,127 @@ fn update_camera_from_input(window: &Window, camera_orbit: &mut CameraOrbit) -> 
 }
 
 fn build_scene() -> Scene {
-    const GRASS: usize = 0;
+    const NIGHT_GRASS: usize = 0;
     const STONE: usize = 1;
-    const WOOD: usize = 2;
-    const PATH: usize = 3;
+    const LAVENDER_WOOD: usize = 2;
+    const PINK_PATH: usize = 3;
     const WATER: usize = 4;
+    const CAT_FUR: usize = 5;
+    const CAT_ACCENT: usize = 6;
+    const GLOW: usize = 7;
+    const MOON: usize = 8;
+    const BLANKET: usize = 9;
 
     let materials = vec![
         Material::new(
-            "pasto",
+            "pasto nocturno",
             TextureKind::Grass,
-            Vec3::new(0.18, 0.58, 0.18),
-            Vec3::new(0.11, 0.38, 0.12),
+            Vec3::new(0.07, 0.23, 0.24),
+            Vec3::new(0.12, 0.36, 0.34),
             0.15,
             0.0,
             0.05,
             1.0,
+            0.0,
         ),
         Material::new(
-            "piedra",
+            "piedra azulada",
             TextureKind::Stone,
-            Vec3::new(0.48, 0.49, 0.48),
-            Vec3::new(0.22, 0.23, 0.24),
+            Vec3::new(0.30, 0.35, 0.48),
+            Vec3::new(0.13, 0.15, 0.24),
             0.25,
             0.0,
             0.08,
             1.0,
+            0.0,
         ),
         Material::new(
-            "madera",
+            "madera lavanda",
             TextureKind::Wood,
-            Vec3::new(0.55, 0.31, 0.13),
-            Vec3::new(0.32, 0.16, 0.06),
+            Vec3::new(0.45, 0.32, 0.62),
+            Vec3::new(0.26, 0.18, 0.38),
             0.18,
             0.0,
             0.04,
             1.0,
+            0.0,
         ),
         Material::new(
-            "arcilla",
+            "sendero rosado",
             TextureKind::Checker { scale: 6.0 },
-            Vec3::new(0.82, 0.74, 0.58),
-            Vec3::new(0.36, 0.29, 0.22),
+            Vec3::new(0.82, 0.55, 0.74),
+            Vec3::new(0.42, 0.30, 0.58),
             0.2,
             0.0,
             0.05,
             1.0,
+            0.0,
         ),
         Material::new(
-            "agua",
+            "agua lunar",
             TextureKind::Water,
-            Vec3::new(0.08, 0.38, 0.62),
-            Vec3::new(0.52, 0.84, 0.95),
+            Vec3::new(0.05, 0.18, 0.38),
+            Vec3::new(0.47, 0.78, 0.98),
             0.45,
             0.55,
-            0.24,
+            0.34,
             1.33,
+            0.0,
+        ),
+        Material::new(
+            "pelaje violeta",
+            TextureKind::CatFur,
+            Vec3::new(0.20, 0.13, 0.34),
+            Vec3::new(0.36, 0.24, 0.52),
+            0.18,
+            0.0,
+            0.12,
+            1.0,
+            0.0,
+        ),
+        Material::new(
+            "patitas crema",
+            TextureKind::Checker { scale: 4.0 },
+            Vec3::new(0.98, 0.78, 0.86),
+            Vec3::new(0.80, 0.58, 0.75),
+            0.26,
+            0.0,
+            0.06,
+            1.0,
+            0.0,
+        ),
+        Material::new(
+            "ojos estrellas",
+            TextureKind::Glow,
+            Vec3::new(0.95, 0.95, 0.48),
+            Vec3::new(0.65, 1.0, 0.95),
+            0.85,
+            0.0,
+            0.25,
+            1.0,
+            1.25,
+        ),
+        Material::new(
+            "luna",
+            TextureKind::Glow,
+            Vec3::new(0.96, 0.88, 0.58),
+            Vec3::new(1.0, 0.96, 0.78),
+            0.5,
+            0.0,
+            0.18,
+            1.0,
+            0.9,
+        ),
+        Material::new(
+            "mantita",
+            TextureKind::Checker { scale: 8.0 },
+            Vec3::new(0.88, 0.42, 0.72),
+            Vec3::new(0.30, 0.22, 0.52),
+            0.22,
+            0.0,
+            0.05,
+            1.0,
+            0.0,
         ),
     ];
 
@@ -304,7 +423,7 @@ fn build_scene() -> Scene {
         Cube::new(
             Vec3::new(-3.2, -1.45, -6.4),
             Vec3::new(3.2, -1.15, -1.1),
-            GRASS,
+            NIGHT_GRASS,
         ),
         Cube::new(
             Vec3::new(-2.9, -1.62, -5.95),
@@ -312,85 +431,186 @@ fn build_scene() -> Scene {
             STONE,
         ),
         Cube::new(
-            Vec3::new(-0.55, -1.14, -6.1),
-            Vec3::new(0.55, -1.02, -1.35),
+            Vec3::new(-0.48, -1.14, -6.05),
+            Vec3::new(0.62, -1.02, -1.6),
             WATER,
         ),
         Cube::new(
-            Vec3::new(-0.72, -0.98, -4.0),
-            Vec3::new(0.72, -0.82, -3.62),
-            WOOD,
+            Vec3::new(-0.88, -0.98, -4.05),
+            Vec3::new(0.92, -0.82, -3.65),
+            LAVENDER_WOOD,
         ),
         Cube::new(
             Vec3::new(-0.18, -0.98, -4.2),
             Vec3::new(0.18, -0.82, -3.42),
-            WOOD,
+            LAVENDER_WOOD,
         ),
         Cube::new(
             Vec3::new(-2.7, -1.09, -2.9),
             Vec3::new(-0.95, -0.96, -2.45),
-            PATH,
+            PINK_PATH,
         ),
         Cube::new(
             Vec3::new(-1.32, -1.09, -3.85),
             Vec3::new(-0.88, -0.96, -2.5),
-            PATH,
+            PINK_PATH,
+        ),
+        Cube::new(
+            Vec3::new(0.9, -1.08, -3.05),
+            Vec3::new(2.15, -0.96, -2.18),
+            BLANKET,
         ),
     ];
 
-    add_house(&mut cubes, STONE, WOOD, PATH);
-    add_tree(&mut cubes, WOOD, GRASS);
+    add_cat(&mut cubes, -1.65, -3.05, 0.95, CAT_FUR, CAT_ACCENT, GLOW);
+    add_cat(&mut cubes, 1.45, -3.0, 0.72, CAT_ACCENT, CAT_FUR, GLOW);
+    add_cat_house(&mut cubes, STONE, LAVENDER_WOOD, PINK_PATH, GLOW);
+    add_moon_and_stars(&mut cubes, MOON, GLOW);
     add_rocks(&mut cubes, STONE);
 
     Scene::new(materials, cubes)
 }
 
-fn add_house(cubes: &mut Vec<Cube>, stone: usize, wood: usize, roof: usize) {
+fn add_cat(
+    cubes: &mut Vec<Cube>,
+    x: f64,
+    z: f64,
+    scale: f64,
+    fur: usize,
+    accent: usize,
+    glow: usize,
+) {
+    let y = -1.15;
     cubes.extend([
         Cube::new(
-            Vec3::new(1.05, -1.15, -4.95),
-            Vec3::new(2.25, -0.2, -3.75),
-            wood,
+            Vec3::new(x - 0.42 * scale, y, z - 0.38 * scale),
+            Vec3::new(x + 0.42 * scale, y + 0.48 * scale, z + 0.26 * scale),
+            fur,
         ),
         Cube::new(
-            Vec3::new(1.18, -1.08, -3.73),
-            Vec3::new(2.12, -0.28, -3.63),
-            stone,
+            Vec3::new(x - 0.34 * scale, y + 0.38 * scale, z + 0.12 * scale),
+            Vec3::new(x + 0.34 * scale, y + 0.92 * scale, z + 0.66 * scale),
+            fur,
         ),
         Cube::new(
-            Vec3::new(1.35, -1.15, -3.61),
-            Vec3::new(1.72, -0.55, -3.5),
-            roof,
+            Vec3::new(x - 0.35 * scale, y + 0.84 * scale, z + 0.19 * scale),
+            Vec3::new(x - 0.12 * scale, y + 1.12 * scale, z + 0.42 * scale),
+            fur,
         ),
         Cube::new(
-            Vec3::new(0.92, -0.24, -5.07),
-            Vec3::new(2.38, 0.0, -3.63),
-            roof,
+            Vec3::new(x + 0.12 * scale, y + 0.84 * scale, z + 0.19 * scale),
+            Vec3::new(x + 0.35 * scale, y + 1.12 * scale, z + 0.42 * scale),
+            fur,
         ),
         Cube::new(
-            Vec3::new(1.12, 0.0, -4.88),
-            Vec3::new(2.18, 0.2, -3.82),
-            roof,
+            Vec3::new(x - 0.20 * scale, y + 0.55 * scale, z + 0.67 * scale),
+            Vec3::new(x - 0.08 * scale, y + 0.68 * scale, z + 0.72 * scale),
+            glow,
+        ),
+        Cube::new(
+            Vec3::new(x + 0.08 * scale, y + 0.55 * scale, z + 0.67 * scale),
+            Vec3::new(x + 0.20 * scale, y + 0.68 * scale, z + 0.72 * scale),
+            glow,
+        ),
+        Cube::new(
+            Vec3::new(x - 0.07 * scale, y + 0.43 * scale, z + 0.68 * scale),
+            Vec3::new(x + 0.07 * scale, y + 0.51 * scale, z + 0.73 * scale),
+            accent,
+        ),
+        Cube::new(
+            Vec3::new(x - 0.32 * scale, y, z - 0.34 * scale),
+            Vec3::new(x - 0.15 * scale, y + 0.14 * scale, z + 0.34 * scale),
+            accent,
+        ),
+        Cube::new(
+            Vec3::new(x + 0.15 * scale, y, z - 0.34 * scale),
+            Vec3::new(x + 0.32 * scale, y + 0.14 * scale, z + 0.34 * scale),
+            accent,
+        ),
+        Cube::new(
+            Vec3::new(x + 0.40 * scale, y + 0.12 * scale, z - 0.38 * scale),
+            Vec3::new(x + 0.58 * scale, y + 0.30 * scale, z + 0.36 * scale),
+            fur,
+        ),
+        Cube::new(
+            Vec3::new(x + 0.52 * scale, y + 0.26 * scale, z + 0.18 * scale),
+            Vec3::new(x + 0.70 * scale, y + 0.46 * scale, z + 0.52 * scale),
+            fur,
         ),
     ]);
 }
 
-fn add_tree(cubes: &mut Vec<Cube>, wood: usize, leaves: usize) {
+fn add_cat_house(cubes: &mut Vec<Cube>, stone: usize, wood: usize, roof: usize, glow: usize) {
     cubes.extend([
         Cube::new(
-            Vec3::new(-2.35, -1.15, -4.85),
-            Vec3::new(-2.02, -0.2, -4.52),
+            Vec3::new(-2.7, -1.15, -5.45),
+            Vec3::new(-1.35, -0.18, -4.15),
             wood,
         ),
         Cube::new(
-            Vec3::new(-2.75, -0.42, -5.24),
-            Vec3::new(-1.62, 0.22, -4.12),
-            leaves,
+            Vec3::new(-2.45, -1.1, -4.13),
+            Vec3::new(-1.62, -0.35, -4.02),
+            stone,
         ),
         Cube::new(
-            Vec3::new(-2.55, 0.12, -5.03),
-            Vec3::new(-1.82, 0.58, -4.32),
-            leaves,
+            Vec3::new(-2.15, -1.1, -4.0),
+            Vec3::new(-1.92, -0.55, -3.92),
+            roof,
+        ),
+        Cube::new(
+            Vec3::new(-2.84, -0.24, -5.58),
+            Vec3::new(-1.2, 0.03, -4.02),
+            roof,
+        ),
+        Cube::new(
+            Vec3::new(-2.58, 0.03, -5.35),
+            Vec3::new(-1.46, 0.25, -4.25),
+            roof,
+        ),
+        Cube::new(
+            Vec3::new(-2.58, -0.02, -3.96),
+            Vec3::new(-2.35, 0.20, -3.90),
+            glow,
+        ),
+        Cube::new(
+            Vec3::new(-1.62, -0.02, -3.96),
+            Vec3::new(-1.39, 0.20, -3.90),
+            glow,
+        ),
+    ]);
+}
+
+fn add_moon_and_stars(cubes: &mut Vec<Cube>, moon: usize, glow: usize) {
+    cubes.extend([
+        Cube::new(
+            Vec3::new(2.10, 0.72, -6.35),
+            Vec3::new(2.82, 1.44, -6.25),
+            moon,
+        ),
+        Cube::new(
+            Vec3::new(2.48, 1.02, -6.22),
+            Vec3::new(2.92, 1.52, -6.12),
+            glow,
+        ),
+        Cube::new(
+            Vec3::new(-2.85, 0.7, -6.2),
+            Vec3::new(-2.66, 0.9, -6.1),
+            glow,
+        ),
+        Cube::new(
+            Vec3::new(-0.42, 0.95, -6.28),
+            Vec3::new(-0.25, 1.12, -6.18),
+            glow,
+        ),
+        Cube::new(
+            Vec3::new(0.75, 0.45, -6.18),
+            Vec3::new(0.92, 0.62, -6.08),
+            glow,
+        ),
+        Cube::new(
+            Vec3::new(1.58, 0.2, -6.12),
+            Vec3::new(1.72, 0.34, -6.02),
+            glow,
         ),
     ]);
 }
@@ -460,7 +680,9 @@ fn shade_hit(
         * material.specular
         * shadow;
 
-    texture_color * lambert + Vec3::new(1.0, 0.94, 0.82) * specular
+    texture_color * lambert
+        + Vec3::new(0.76, 0.84, 1.0) * specular
+        + texture_color * material.emission
 }
 
 fn shadow_factor(scene: &Scene, point: Vec3, normal: Vec3, light_direction: Vec3) -> f64 {
@@ -519,15 +741,19 @@ fn refracted_color(
 fn skybox_color(ray: Ray) -> Color {
     let unit_direction = ray.direction.unit();
     let blend = 0.5 * (unit_direction.y + 1.0);
-    let horizon = Vec3::new(0.9, 0.96, 1.0);
-    let zenith = Vec3::new(0.32, 0.58, 0.94);
-    let sun_direction = Vec3::new(-0.35, 0.72, 0.22).unit();
-    let sun = unit_direction.dot(sun_direction).max(0.0).powf(180.0);
-    let cloud_bands = ((unit_direction.x * 18.0 + unit_direction.z * 8.0).sin()
-        * (unit_direction.y * 12.0).cos())
-    .max(0.0)
-    .powf(5.0);
-    let clouds = Vec3::new(1.0, 1.0, 1.0) * (cloud_bands * 0.18 * blend.max(0.0));
+    let horizon = Vec3::new(0.08, 0.12, 0.24);
+    let zenith = Vec3::new(0.02, 0.03, 0.12);
+    let moon_direction = Vec3::new(0.45, 0.55, -0.7).unit();
+    let moon = unit_direction.dot(moon_direction).max(0.0).powf(360.0);
+    let moon_halo = unit_direction.dot(moon_direction).max(0.0).powf(18.0);
+    let star_seed = (unit_direction.x * 91.7).sin()
+        * (unit_direction.y * 47.3).cos()
+        * (unit_direction.z * 63.1).sin();
+    let stars = star_seed.abs().powf(34.0) * blend.max(0.0);
 
-    (1.0 - blend) * horizon + blend * zenith + Vec3::new(1.0, 0.82, 0.38) * (sun * 0.9) + clouds
+    (1.0 - blend) * horizon
+        + blend * zenith
+        + Vec3::new(0.96, 0.9, 0.66) * (moon * 1.4)
+        + Vec3::new(0.50, 0.60, 0.95) * (moon_halo * 0.25)
+        + Vec3::new(0.92, 0.95, 1.0) * (stars * 1.2)
 }
