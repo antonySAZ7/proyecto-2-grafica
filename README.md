@@ -126,7 +126,7 @@ renders/final_gatos_nocturnos.ppm
 
 ## Video
 
-Pendiente de adjuntar en GitHub despues de exportar o grabar la animacion.
+![Animacion del diorama nocturno de gatos](media/diorama_gatos.gif)
 
 ## Estado
 
